@@ -32,7 +32,7 @@ done
 # Launch commands
 if [ "$type" == "master"  ]; then
 	rethinkdb --bind all
-elif [ "$type" == "node" && "$address" != "" ]; then
+elif [[ "$type" == "node" && "$address" != "" ]]; then
 	rethinkdb --join $address:29015 --bind all
 else
 	usage
