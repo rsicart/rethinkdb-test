@@ -1,6 +1,6 @@
 #!/bin/bash
 
-maxUsers=500
+maxUsers=1000
 tplFile="users.json.tpl"
 destFile="data.users.json"
 
