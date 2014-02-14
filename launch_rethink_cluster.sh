@@ -31,9 +31,15 @@ done
 
 # Launch commands
 if [ "$type" == "master"  ]; then
-	rethinkdb --bind all
+	exists=$(ps aux | grep rethink | grep -v grep)
+	if [ "$?" == "0" ];  then
+		nohup rethinkdb --bind all &
+	fi
 elif [[ "$type" == "node" && "$address" != "" ]]; then
-	rethinkdb --join $address:29015 --bind all
+	exists=$(ps aux | grep rethink | grep -v grep)
+	if [ "$?" == "0" ];  then
+		nohup rethinkdb --join $address:29015 --bind all &
+	fi
 else
 	usage
 fi
