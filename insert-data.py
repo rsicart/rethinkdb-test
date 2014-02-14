@@ -7,7 +7,7 @@ from subprocess import call
 createUsersScript = "./create_sample_users.sh"
 userFileName = "data.users.json"
 dbname = "profiling"
-dbhost = "192.168.11.69"
+dbhost = "192.168.56.101"
 dbtable = "users"
 
 call([createUsersScript])
