@@ -51,12 +51,11 @@ def read(dbhostname, dbname, dbtable, key = 'random'):
 		ReadCount.hits += 1
 		''' print "End thread read <key: {}>".format(key)
 		'''
+		rRd.close()
 	except:
 		''' print "Read thread error."
 		'''
 		ReadCount.errors += 1
-	finally:
-		rRd.close()
 
 
 def update(dbhostname, dbname, dbtable, key = 'all'):
@@ -74,12 +73,11 @@ def update(dbhostname, dbname, dbtable, key = 'all'):
 		UpdateCount.hits += 1
 		''' print "Thread update finished."
 		'''
+		rUp.close()
 	except:
 		''' print "Update thread error."
 		'''
 		UpdateCount.errors += 1
-	finally:
-		rUp.close()
 
 def assertEquals(expected, obtained):
 	return expected == obtained
