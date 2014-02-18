@@ -33,12 +33,12 @@ done
 if [ "$type" == "master"  ]; then
 	exists=$(ps aux | grep rethink | grep -v grep)
 	if [ "$?" == "0" ];  then
-		nohup rethinkdb --bind all &
+		nohup rethinkdb --bind all --daemon &
 	fi
 elif [[ "$type" == "node" && "$address" != "" ]]; then
 	exists=$(ps aux | grep rethink | grep -v grep)
 	if [ "$?" == "0" ];  then
-		nohup rethinkdb --join $address:29015 --bind all &
+		nohup rethinkdb --join $address:29015 --bind all --daemon &
 	fi
 else
 	usage
