@@ -17,6 +17,8 @@ from time import sleep
 from random import randint, shuffle
 
 class Count():
+	''' Counter for events
+	'''
 	hits = 0
 	errors = 0
 
@@ -29,6 +31,8 @@ class UpdateCount(Count):
 
 
 class Concurrency:
+	''' Class that launches multiple threaded reads and updates in a rethinkDb cluster
+	'''
 
 	def __init__(self):
 		self.readCount = ReadCount()
@@ -36,8 +40,14 @@ class Concurrency:
 		self.threadList = []
 		self.actions = {'key':None}
 
+
+	def usage(self):
+		print "Usage: concurrency.py -h [-r #READS] [-u #UPDATES] [-k all|1..20]"
+		print "Long options: --help --reads=#READS --updates=#UPDATES --key=all|1..20"
+
+
 	def read(self, dbhostname, dbname, dbtable, key = 'random'):
-		'''	Reads a row from db
+		'''	Reads users table
 		'''
 		updatedFieldBefore = "80.80.80.1"
 		updatedFieldAfter = "80.80.80.80"
@@ -61,7 +71,7 @@ class Concurrency:
 
 
 	def update(self, dbhostname, dbname, dbtable, key = 'random'):
-		''' Update all users table
+		''' Update users table
 		'''
 		try:
 			rUp = r.connect(dbhostname, 28015, dbname)
@@ -79,8 +89,10 @@ class Concurrency:
 		except:
 			self.updateCount.errors += 1
 
+
 	def assertEquals(self, expected, obtained):
 		return expected == obtained
+
 
 	def reset(self, dbhostname, dbname, dbtable):
 		''' Reset users table to init status
@@ -89,9 +101,6 @@ class Concurrency:
 		r.db(dbname).table(dbtable).update({'address':'80.80.80.1'}).run(rRst)
 		rRst.close()
 
-	def usage(self):
-		print "Usage: concurrency.py -h -r NUMBER_OF_READS"
-		print "Long options: --help --reads=NUMBER_OF_READS"
 
 	def getHost(self):
 		dbhosts = [
@@ -103,12 +112,14 @@ class Concurrency:
 		]
 		return dbhosts[randint(0,19)]
 
+
 	def getDbConfig(self):
 		''' Returns a list with database configuration, including a random node
 		'''
 		dbname = "profiling"
 		dbtable = "users"
 		return [self.getHost(), dbname, dbtable]
+
 
 	def test(self, test, counter, key = None):
 		''' Function to test sequential/random reads and writes
@@ -118,12 +129,14 @@ class Concurrency:
 				self.threadList.append(Thread(target = getattr(self, test), name="test-{}-{}".format(test, i), args = self.getDbConfig() + [key]))
 		else:
 			usage
-	
+
+
 	def stopThreads(self):
 		''' Finish threads (wait until finished)
 		'''
 		for th in self.threadList:
 			self.threadList.pop(0).join(120)
+
 
 	def stats(self):
 		print "Reads:			{} hits ({} fresh);	{} errors".format(self.readCount.hits, self.readCount.fresh, self.readCount.errors)
