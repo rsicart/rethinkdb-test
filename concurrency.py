@@ -44,21 +44,15 @@ class Concurrency:
 
 		try:
 			rRd = r.connect(dbhostname, 28015, dbname)
-			''' print "Begin thread read <key: {}>".format(key)
-			'''
 			if key is not None and key != 'random':
 				doc = r.db(dbname).table(dbtable).get(key).run(rRd)
 			else:
 				doc = r.db(dbname).table(dbtable).get(randint(1,1000)).run(rRd)
 
 			if assertEquals(doc['address'], updatedFieldAfter):
-				''' print "FRESH data:", doc['address']
-				'''
 				self.readCount.fresh += 1
 
 			self.readCount.hits += 1
-			''' print "End thread read <key: {}>".format(key)
-			'''
 			rRd.close()
 		except:
 			''' print "Read thread error."
@@ -70,8 +64,6 @@ class Concurrency:
 		''' Update all users table
 		'''
 		try:
-			''' print "Thread update Start < key: {} >".format(key)
-			'''
 			rUp = r.connect(dbhostname, 28015, dbname)
 			if key is not None and key == 'all':
 				r.db(dbname).table(dbtable).update({'address':'80.80.80.80'}).run(rUp)
@@ -83,12 +75,8 @@ class Concurrency:
 				r.db(dbname).table(dbtable).get(randint(1,1000)).update({'address':'80.80.80.{}'.format(randint(1,255))}).run(rUp)
 
 			self.updateCount.hits += 1
-			''' print "Thread update finished."
-			'''
 			rUp.close()
 		except:
-			''' print "Update thread error."
-			'''
 			self.updateCount.errors += 1
 
 	def assertEquals(self, expected, obtained):
