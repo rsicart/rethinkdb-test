@@ -12,15 +12,19 @@
 import sys, getopt
 import json
 import rethinkdb as r
+from rethinkdb.errors import RqlRuntimeError, RqlDriverError
 from threading import Thread
 from time import sleep
-from random import randint, shuffle
+from random import randint, shuffle, random
 
 class Count():
 	''' Counter for events
 	'''
-	hits = 0
-	errors = 0
+	def __init__(self):
+		self.hits = 0
+		self.errors = 0
+		self.other = 0
+		self.notFound = []
 
 class ReadCount(Count):
 	fresh = 0
@@ -38,7 +42,7 @@ class Concurrency:
 		self.readCount = ReadCount()
 		self.updateCount = UpdateCount()
 		self.threadList = []
-		self.actions = {'key':None}
+		self.actions = {'key':None, 'outdated':None}
 
 
 	def usage(self):
@@ -46,7 +50,7 @@ class Concurrency:
 		print "Long options: --help --reads=#READS --updates=#UPDATES --key=all|1..20"
 
 
-	def read(self, dbhostname, dbname, dbtable, key = 'random'):
+	def read(self, dbhostname, dbname, dbtable, key = 'random', outOfDate = False):
 		'''	Reads users table
 		'''
 		updatedFieldBefore = "80.80.80.1"
@@ -55,39 +59,53 @@ class Concurrency:
 		try:
 			rRd = r.connect(dbhostname, 28015, dbname)
 			if key is not None and key != 'random':
-				doc = r.db(dbname).table(dbtable).get(key).run(rRd)
+				doc = r.db(dbname).table(dbtable).get(int(key)).run(rRd, use_outdated = outOfDate)
 			else:
-				doc = r.db(dbname).table(dbtable).get(randint(1,1000)).run(rRd)
+				key = randint(1,1000)
+				doc = r.db(dbname).table(dbtable).get(key).run(rRd, use_outdated = outOfDate)
 
-			if assertEquals(doc['address'], updatedFieldAfter):
+			'''
+			if self.assertEquals(doc['address'], updatedFieldAfter):
 				self.readCount.fresh += 1
+			'''
+			if doc is not None:
+				self.readCount.hits += 1
+			else:
+				self.readCount.notFound.append(key)
 
-			self.readCount.hits += 1
 			rRd.close()
-		except:
+		except RqlDriverError, RqlRuntimeError:
 			''' print "Read thread error."
 			'''
 			self.readCount.errors += 1
+		except:
+			self.readCount.other += 1
 
 
-	def update(self, dbhostname, dbname, dbtable, key = 'random'):
+	def update(self, dbhostname, dbname, dbtable, key = 'random', outOfDate = False):
 		''' Update users table
 		'''
 		try:
 			rUp = r.connect(dbhostname, 28015, dbname)
 			if key is not None and key == 'all':
-				r.db(dbname).table(dbtable).update({'address':'80.80.80.80'}).run(rUp)
+				doc = r.db(dbname).table(dbtable).update({'address':'80.80.80.80'}).run(rUp)
 			elif key is not None and isinstance(key, (int, long)):
 				''' specific key '''
-				r.db(dbname).table(dbtable).get(key).update({'address':'80.80.80.{}'.format(randint(1,255))}).run(rUp)
+				doc = r.db(dbname).table(dbtable).get(key).update({'address':'80.80.80.{}'.format(randint(1,255))}).run(rUp)
 			else:
 				''' random '''
-				r.db(dbname).table(dbtable).get(randint(1,1000)).update({'address':'80.80.80.{}'.format(randint(1,255))}).run(rUp)
+				doc = r.db(dbname).table(dbtable).get(randint(1,1000)).update({'address':'80.80.80.{}'.format(randint(1,255))}).run(rUp)
 
-			self.updateCount.hits += 1
+			if doc is not None:
+				self.updateCount.hits += 1
+			else:
+				self.updateCount.notFound.append(key)
+
 			rUp.close()
-		except:
+		except RqlDriverError, RqlRuntimeError:
 			self.updateCount.errors += 1
+		except:
+			self.updateCount.other += 1
 
 
 	def assertEquals(self, expected, obtained):
@@ -121,12 +139,12 @@ class Concurrency:
 		return [self.getHost(), dbname, dbtable]
 
 
-	def test(self, test, counter, key = None):
+	def test(self, test, counter, key = None, outOfDate = False):
 		''' Function to test sequential/random reads and writes
 		'''
 		if test in ('read', 'update'):
 			for i in range(0, counter):
-				self.threadList.append(Thread(target = getattr(self, test), name="test-{}-{}".format(test, i), args = self.getDbConfig() + [key]))
+				self.threadList.append(Thread(target = getattr(self, test), name="test-{}-{}".format(test, i), args = self.getDbConfig() + [key] + [outOfDate]))
 		else:
 			usage
 
@@ -139,13 +157,16 @@ class Concurrency:
 
 
 	def stats(self):
-		print "Reads:			{} hits ({} fresh);	{} errors".format(self.readCount.hits, self.readCount.fresh, self.readCount.errors)
-		print "Updates:		{} hits;	{} errors".format(self.updateCount.hits, self.updateCount.errors) 
-
+		print "Reads:			{} hits ({} fresh);	{} errors;	{} other".format(self.readCount.hits, self.readCount.fresh, self.readCount.errors, self.readCount.other)
+		if len(self.readCount.notFound) > 0:
+			print "Reads not found: {}".format(set(self.readCount.notFound))
+		print "Updates:		{} hits;	{} errors;	{} other".format(self.updateCount.hits, self.updateCount.errors, self.updateCount.other) 
+		if len(self.updateCount.notFound) > 0:
+			print "Updates not found: {}".format(set(self.updateCount.notFound))
 
 def main(argv):
 	try:
-		opts, args = getopt.getopt(argv, "hr:u:k:", ["help", "reads=", "updates=", "key="])
+		opts, args = getopt.getopt(argv, "hr:u:k:o", ["help", "reads=", "updates=", "key=", "outdated"])
 	except getopt.GetoptError:
 		c.usage()
 		sys.exit(2)
@@ -164,22 +185,26 @@ def main(argv):
 			c.actions['reads'] = int(arg)
 		elif opt in ('-k', '--key'):
 			c.actions['key'] = arg
+		elif opt in ('-o', '--outdated'):
+			c.actions['outdated'] = True
 
 	if 'updates' in c.actions:
 		''' Update (launch thread)
 		'''
-		c.test('update', c.actions['updates'], c.actions['key'])
+		c.test('update', c.actions['updates'], c.actions['key'], c.actions['outdated'])
 
 	if 'reads' in c.actions:
 		''' Read (launch thread)
 		'''
-		c.test('read', c.actions['reads'], c.actions['key'])
+		c.test('read', c.actions['reads'], c.actions['key'], c.actions['outdated'])
 
 
 	''' Start running threads
 	'''
 	shuffle(c.threadList)
 	for th in c.threadList:
+		if randint(0,1) > 0:
+			sleep(0.3)
 		th.start()	
 
 	''' Reset environment (launch thread)
