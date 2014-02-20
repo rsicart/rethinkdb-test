@@ -1,11 +1,12 @@
 #!/bin/bash
 
-usage() { echo "Usage: ./rethink_launch_cluster.sh  -t master|node [-a IP_ADDR]"; exit 1; }
+usage() { echo "Usage: ./rethink_launch_cluster.sh  -t master|node [-a IP_ADDR] [-k stop]"; exit 1; }
 
 # Valid options
-options="t:a:"
+options="t:a:k:"
 type=""
 address=""
+name=$(hostname | tr '-' '_')
 
 while getopts $options opt; do
 	case $opt in
@@ -23,6 +24,13 @@ while getopts $options opt; do
 				usage
 			fi
 			;;
+		k)
+			if [[ "${OPTARG}" == "stop" ]]; then
+				stop=${OPTARG}
+			else
+				usage
+			fi
+			;;
 		\?)
 			usage
 			;;
@@ -33,13 +41,18 @@ done
 if [ "$type" == "master"  ]; then
 	exists=$(ps aux | grep rethink | grep -v grep)
 	if [ "$?" == "0" ];  then
-		nohup rethinkdb --bind all --daemon &
+		nohup rethinkdb -n $name --bind all \
+						--daemon --pid-file /var/run/rethinkdb/pid_file &
 	fi
 elif [[ "$type" == "node" && "$address" != "" ]]; then
 	exists=$(ps aux | grep rethink | grep -v grep)
 	if [ "$?" == "0" ];  then
-		nohup rethinkdb --join $address:29015 --bind all --daemon &
+		nohup rethinkdb -n $name --join $address:29015 --bind all \
+						--daemon --pid-file /var/run/rethinkdb/pid_file &
 	fi
+elif [[ "$stop" == "stop" ]]; then
+	nohup kill -SIGKILL `cat /var/run/rethinkdb/pid_file`
+	rm /var/run/rethinkdb/pid_file
 else
 	usage
 fi
